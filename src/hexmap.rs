@@ -44,3 +44,21 @@ impl<T> HexMap<T> {
         &mut self.tiles[foo]
     }
 }
+
+pub fn wrap_hex_pos(pos: HexPos, map_width: u32, map_height: u32) -> HexPos {
+    let q = if pos.q >= map_width as i32 {
+        pos.q % map_width as i32
+    } else if pos.q < 0 {
+        (map_width as i32 - 1) - ((pos.q.abs() - 1) % map_width as i32)
+    } else {
+        pos.q
+    };
+    let r = if pos.r >= map_height as i32 {
+        pos.r % map_height as i32
+    } else if pos.r < 0 {
+        (map_height as i32 - 1) - ((pos.r.abs() - 1) % map_height as i32)
+    } else {
+        pos.r
+    };
+    HexPos { q, r }
+}

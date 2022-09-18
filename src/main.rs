@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use bevy::{
     math::{vec2, vec3},
     prelude::*,
@@ -121,6 +119,7 @@ fn update_hexmap_render(
         }
         None => pos_to_hex_pos(cam_pos.translation.x, cam_pos.translation.y),
     };
+    let selected_hex = hexmap::wrap_hex_pos(selected_hex, 16, 16);
 
     for q in 0..16 {
         for r in 0..16 {
