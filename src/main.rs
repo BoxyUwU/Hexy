@@ -1,8 +1,4 @@
-use bevy::{
-    math::{vec2, vec3},
-    prelude::*,
-    sprite::Anchor,
-};
+use bevy::{math::vec2, prelude::*, sprite::Anchor};
 use hexmap::{HexMap, HexPos};
 use leafwing_input_manager::{prelude::*, user_input::InputKind};
 // use iyes_loopless::prelude::*;
@@ -139,11 +135,9 @@ fn update_hexmap_render(
                     anchor: Anchor::BottomLeft,
                     ..default()
                 },
-                transform: Transform::from_translation(vec3(
-                    (q * 32) as f32,
-                    (r * 32) as f32 + (q * 16) as f32,
-                    0.,
-                )),
+                transform: Transform::from_translation(
+                    hex_pos_to_pos(HexPos { q, r }, 32, 32).extend(0.0),
+                ),
                 ..default()
             });
         }
@@ -158,7 +152,17 @@ fn pos_to_hex_pos(x: f32, y: f32) -> HexPos {
     HexPos { q: x, r: y }
 }
 
-fn update_camera_pos(mut cam: Query<(&mut Transform, &ActionState<Action>), With<Camera>>) {
+fn hex_pos_to_pos(pos: HexPos, hex_width: u32, hex_height: u32) -> Vec2 {
+    assert_eq!(hex_height % 2, 0);
+    let x = pos.q * hex_width as i32;
+    let y = pos.r * hex_height as i32 + pos.q * (hex_height as i32 / 2);
+    vec2(x as f32, y as f32)
+}
+
+fn update_camera_pos(
+    mut cam: Query<(&mut Transform, &ActionState<Action>), With<Camera>>,
+    map: Res<HexMap<MyTileData>>,
+) {
     const CAM_SPEED: f32 = 4.0;
 
     let (mut pos, actions) = cam.single_mut();
@@ -166,5 +170,15 @@ fn update_camera_pos(mut cam: Query<(&mut Transform, &ActionState<Action>), With
         let movement = actions.clamped_axis_pair(Action::MoveCamera).unwrap().xy();
         pos.translation += movement.extend(0.0) * CAM_SPEED;
         pos.translation = pos.translation.as_ivec3().as_vec3();
+    }
+
+    // wrap pos around map
+    let hex_pos = pos_to_hex_pos(pos.translation.x, pos.translation.y);
+    let wrapped_pos = hexmap::wrap_hex_pos(hex_pos, map.width() as u32, map.height() as u32);
+    if hex_pos != wrapped_pos {
+        let snapped_pos = hex_pos_to_pos(hex_pos, 32, 32);
+        let offset = snapped_pos - pos.translation.truncate();
+        let new_pos = hex_pos_to_pos(wrapped_pos, 32, 32) - offset;
+        pos.translation = new_pos.extend(0.0);
     }
 }

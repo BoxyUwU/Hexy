@@ -12,6 +12,14 @@ pub struct HexMap<T> {
 }
 
 impl<T> HexMap<T> {
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
     pub fn new(width: usize, height: usize, tiles: impl IntoIterator<Item = T>) -> Self {
         let mut tiles_iter = tiles.into_iter();
         let tiles = (&mut tiles_iter).take(width * height).collect::<Box<[T]>>();
