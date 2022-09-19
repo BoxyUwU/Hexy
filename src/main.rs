@@ -7,7 +7,6 @@ pub mod hexmap;
 
 #[derive(Component)]
 struct MyTileData {
-    render: Entity,
     kind: TileKind,
 }
 
@@ -25,8 +24,11 @@ impl TileKind {
     }
 }
 
-#[derive(Component)]
-struct RenderTileEntity;
+#[derive(Component, Copy, Clone, Eq, PartialEq)]
+struct RenderTileEntity {
+    q: i32,
+    r: i32,
+}
 
 fn main() {
     App::new()
@@ -34,6 +36,8 @@ fn main() {
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_startup_system(default_camera)
         .add_startup_system(init_map)
+        .add_system(update_window_size)
+        .add_system(update_render_entities)
         .add_system(update_hexmap_render)
         .add_system(update_camera_pos)
         .run();
@@ -72,17 +76,15 @@ fn default_camera(mut cmds: Commands<'_, '_>) {
         });
 }
 
-fn init_map(mut cmds: Commands<'_, '_>) {
+fn init_map(mut cmds: Commands<'_, '_>, windows: Res<Windows>) {
     let map = HexMap::new(
         16,
         16,
         {
             let mut i = 0;
-            let cmds = &mut cmds;
             std::iter::from_fn(move || {
                 i += 1;
                 Some(MyTileData {
-                    render: cmds.spawn_bundle((RenderTileEntity,)).id(),
                     kind: if i % 6 == 0 && i > 100 && i < 150 {
                         TileKind::Wall
                     } else {
@@ -94,9 +96,73 @@ fn init_map(mut cmds: Commands<'_, '_>) {
         .take(16 * 16),
     );
     cmds.insert_resource(map);
+    let window = windows.get_primary().unwrap();
+    cmds.insert_resource(WindowSize(window.width(), window.height()));
+}
+
+#[derive(Copy, Clone, PartialEq)]
+struct WindowSize(f32, f32);
+
+fn update_window_size(mut window_size: ResMut<WindowSize>, windows: Res<Windows>) {
+    let window = windows.get_primary().unwrap();
+    let size = WindowSize(window.width(), window.height());
+    if *window_size != size {
+        *window_size = size;
+    }
+}
+
+fn update_render_entities(
+    mut cmds: Commands<'_, '_>,
+    mut render_entities: Query<(Entity, &mut RenderTileEntity)>,
+    window_size: Res<WindowSize>,
+    camera: Query<&Transform, With<Camera>>,
+) {
+    let camera_pos = camera.single();
+    let start_x = camera_pos.translation.x - window_size.0 / 2. - 32.;
+    let end_x = camera_pos.translation.x + window_size.0 / 2. + 32.;
+    let start_y = camera_pos.translation.y - window_size.1 / 2. - 32.;
+    let end_y = camera_pos.translation.y + window_size.1 / 2. + 32.;
+
+    let mut tiles = vec![];
+
+    let mut current_y = 0;
+    while start_y + current_y as f32 * 32. <= end_y {
+        let mut current_x = 0;
+        while start_x + current_x as f32 * 32. <= end_x {
+            let y_offset = (current_x % 2) * 16;
+            let x = start_x + current_x as f32 * 32.;
+            let y = start_y + current_y as f32 * 32. + y_offset as f32;
+
+            let hex_pos = pos_to_hex_pos(x, y);
+            tiles.push(hex_pos);
+
+            current_x += 1;
+        }
+        current_y += 1;
+    }
+    let mut tile_iter = tiles.into_iter();
+    let mut query_iter = render_entities.iter_mut();
+
+    loop {
+        match (query_iter.next(), tile_iter.next()) {
+            (Some((_, mut tile_pos)), Some(tile)) => {
+                tile_pos.q = tile.q;
+                tile_pos.r = tile.r;
+            }
+            (None, Some(tile)) => {
+                cmds.spawn_bundle((RenderTileEntity {
+                    q: tile.q,
+                    r: tile.r,
+                },));
+            }
+            (Some((entity, _)), None) => cmds.entity(entity).despawn(),
+            (None, None) => break,
+        }
+    }
 }
 
 fn update_hexmap_render(
+    render_tiles: Query<(Entity, &RenderTileEntity)>,
     camera: Query<&Transform, With<Camera>>,
     mut cmds: Commands<'_, '_>,
     map: Res<HexMap<MyTileData>>,
@@ -106,41 +172,37 @@ fn update_hexmap_render(
     let window = window.get_primary().unwrap();
 
     let selected_hex = match window.cursor_position() {
-        Some(cursor_pos) => {
-            dbg!(cursor_pos);
-            pos_to_hex_pos(
-                cursor_pos.x + cam_pos.translation.x - window.width() / 2.,
-                cursor_pos.y + cam_pos.translation.y - window.height() / 2.,
-            )
-        }
+        Some(cursor_pos) => pos_to_hex_pos(
+            cursor_pos.x + cam_pos.translation.x - window.width() / 2.,
+            cursor_pos.y + cam_pos.translation.y - window.height() / 2.,
+        ),
         None => pos_to_hex_pos(cam_pos.translation.x, cam_pos.translation.y),
     };
     let selected_hex = hexmap::wrap_hex_pos(selected_hex, 16, 16);
 
-    for q in 0..16 {
-        for r in 0..16 {
-            let tile = map.get(HexPos { q, r });
-            let e = tile.render;
+    for (entity, render_tile) in render_tiles.iter() {
+        let tile_pos = HexPos {
+            q: render_tile.q,
+            r: render_tile.r,
+        };
+        let wrapped_tile_pos = hexmap::wrap_hex_pos(tile_pos, 16, 16);
+        let tile = map.get(wrapped_tile_pos);
 
-            let color = if selected_hex == (HexPos { q, r }) {
-                Color::RED
-            } else {
-                tile.kind.color()
-            };
+        let color = match selected_hex == wrapped_tile_pos {
+            true => Color::RED,
+            false => tile.kind.color(),
+        };
 
-            cmds.entity(e).insert_bundle(SpriteBundle {
-                sprite: Sprite {
-                    color,
-                    custom_size: Some(vec2(30., 30.)),
-                    anchor: Anchor::BottomLeft,
-                    ..default()
-                },
-                transform: Transform::from_translation(
-                    hex_pos_to_pos(HexPos { q, r }, 32, 32).extend(0.0),
-                ),
+        cmds.entity(entity).insert_bundle(SpriteBundle {
+            sprite: Sprite {
+                color,
+                custom_size: Some(vec2(30., 30.)),
+                anchor: Anchor::BottomLeft,
                 ..default()
-            });
-        }
+            },
+            transform: Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0)),
+            ..default()
+        });
     }
 }
 

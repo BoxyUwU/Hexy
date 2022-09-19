@@ -1,4 +1,4 @@
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct HexPos {
     pub q: i32,
     pub r: i32,
