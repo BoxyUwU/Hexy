@@ -1,12 +1,7 @@
-use crate::{
-    hexmap::{HexMap, HexPos},
-    Action,
-};
+use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
 use bevy::{math::vec2, prelude::*, sprite::Anchor};
 use leafwing_input_manager::prelude::*;
 // use iyes_loopless::prelude::*;
-
-use super::MyTileData;
 
 #[derive(Component, Copy, Clone, Eq, PartialEq)]
 struct RenderTileEntity {
@@ -90,9 +85,11 @@ fn update_hexmap_render(
     render_tiles: Query<(Entity, &RenderTileEntity)>,
     camera: Query<&Transform, With<Camera>>,
     mut cmds: Commands<'_, '_>,
-    map: Res<HexMap<MyTileData>>,
+    map: CurrentHexMap<'_, '_>,
     window: Res<Windows>,
 ) {
+    let map = map.hexmap();
+
     let cam_pos = camera.single();
     let window = window.get_primary().unwrap();
 
@@ -131,25 +128,11 @@ fn update_hexmap_render(
     }
 }
 
-/// x y should be in "world space", not screen space.
-fn pos_to_hex_pos(x: f32, y: f32) -> HexPos {
-    let x = f32::floor(x / 32.) as i32;
-    let y = y - x as f32 * 16.;
-    let y = f32::floor(y / 32.) as i32;
-    HexPos { q: x, r: y }
-}
-
-fn hex_pos_to_pos(pos: HexPos, hex_width: u32, hex_height: u32) -> Vec2 {
-    assert_eq!(hex_height % 2, 0);
-    let x = pos.q * hex_width as i32;
-    let y = pos.r * hex_height as i32 + pos.q * (hex_height as i32 / 2);
-    vec2(x as f32, y as f32)
-}
-
 fn update_camera_pos(
     mut cam: Query<(&mut Transform, &ActionState<Action>), With<Camera>>,
-    map: Res<HexMap<MyTileData>>,
+    map: CurrentHexMap<'_, '_>,
 ) {
+    let map = map.hexmap();
     const CAM_SPEED: f32 = 4.0;
 
     let (mut pos, actions) = cam.single_mut();
@@ -168,4 +151,19 @@ fn update_camera_pos(
         let new_pos = hex_pos_to_pos(wrapped_pos, 32, 32) - offset;
         pos.translation = new_pos.extend(0.0);
     }
+}
+
+/// x y should be in "world space", not screen space.
+fn pos_to_hex_pos(x: f32, y: f32) -> HexPos {
+    let x = f32::floor(x / 32.) as i32;
+    let y = y - x as f32 * 16.;
+    let y = f32::floor(y / 32.) as i32;
+    HexPos { q: x, r: y }
+}
+
+fn hex_pos_to_pos(pos: HexPos, hex_width: u32, hex_height: u32) -> Vec2 {
+    assert_eq!(hex_height % 2, 0);
+    let x = pos.q * hex_width as i32;
+    let y = pos.r * hex_height as i32 + pos.q * (hex_height as i32 / 2);
+    vec2(x as f32, y as f32)
 }

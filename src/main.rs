@@ -1,17 +1,19 @@
 use bevy::prelude::*;
 use hexmap::HexMap;
 use leafwing_input_manager::{prelude::*, user_input::InputKind};
+use surfaces::{SelectedSurface, Surfaces};
 // use iyes_loopless::prelude::*;
 
 pub mod draw;
 pub mod hexmap;
+pub mod simulation;
+pub mod surfaces;
 
-#[derive(Component)]
-struct MyTileData {
+pub struct MyTileData {
     kind: TileKind,
 }
 
-enum TileKind {
+pub enum TileKind {
     Ground,
     Wall,
 }
@@ -30,7 +32,8 @@ fn main() {
     app.add_plugins(DefaultPlugins)
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_startup_system(default_camera)
-        .add_startup_system(init_map);
+        .add_startup_system(init_map)
+        .add_system(simulate_surfaces);
     draw::init_app(&mut app);
     app.run();
 }
@@ -87,5 +90,13 @@ fn init_map(mut cmds: Commands<'_, '_>) {
         }
         .take(16 * 16),
     );
-    cmds.insert_resource(map);
+    let mut surfaces = Surfaces::new();
+    surfaces.new_surface(World::new(), map);
+    simulation::add_systems(&mut surfaces);
+    cmds.insert_resource(surfaces);
+    cmds.insert_resource(SelectedSurface(0));
+}
+
+fn simulate_surfaces(mut surfaces: ResMut<Surfaces>) {
+    surfaces.simulate_step();
 }
