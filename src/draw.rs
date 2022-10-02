@@ -1,6 +1,7 @@
 use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
 use bevy::{math::vec2, prelude::*, sprite::Anchor};
 use leafwing_input_manager::prelude::*;
+// use std::f32::consts::PI;
 // use iyes_loopless::prelude::*;
 
 #[derive(Component, Copy, Clone, Eq, PartialEq)]
@@ -17,7 +18,12 @@ pub fn init_app(app: &mut App) {
         let window = windows.get_primary().unwrap();
         cmds.insert_resource(WindowSize(window.width(), window.height()));
     });
+    app.insert_resource(AmbientLight {
+        color: Color::WHITE,
+        brightness: 1.0 / 5.0f32,
+    });
     app.add_system(update_camera_pos)
+        .add_system(animate_light_direction)
         .add_system(update_window_size.after(update_camera_pos))
         .add_system(update_render_entities.after(update_window_size))
         .add_system(update_hexmap_render.after(update_render_entities));
@@ -36,6 +42,7 @@ fn update_render_entities(
     mut render_entities: Query<(Entity, &mut RenderTileEntity)>,
     window_size: Res<WindowSize>,
     camera: Query<&Transform, With<Camera>>,
+    asset_server: Res<AssetServer>,
 ) {
     let camera_pos = camera.single();
     let start_x = camera_pos.translation.x - window_size.0 / 2. - 32.;
@@ -73,7 +80,11 @@ fn update_render_entities(
                 cmds.spawn_bundle((RenderTileEntity {
                     q: tile.q,
                     r: tile.r,
-                },));
+                },))
+                    .insert_bundle(SceneBundle {
+                        scene: asset_server.load("tile.glb"),
+                        ..default()
+                    });
             }
             (Some((entity, _)), None) => cmds.entity(entity).despawn(),
             (None, None) => break,
@@ -87,6 +98,7 @@ fn update_hexmap_render(
     mut cmds: Commands<'_, '_>,
     map: CurrentHexMap<'_, '_>,
     window: Res<Windows>,
+    asset_server: Res<AssetServer>,
 ) {
     let map = map.hexmap();
 
@@ -115,16 +127,49 @@ fn update_hexmap_render(
             false => tile.kind.color(),
         };
 
-        cmds.entity(entity).insert_bundle(SpriteBundle {
-            sprite: Sprite {
-                color,
-                custom_size: Some(vec2(30., 30.)),
-                anchor: Anchor::BottomLeft,
-                ..default()
-            },
+        // cmds.entity(entity).insert_bundle(SpriteBundle {
+        //     sprite: Sprite {
+        //         color,
+        //         custom_size: Some(vec2(30., 30.)),
+        //         anchor: Anchor::BottomLeft,
+        //         ..default()
+        //     },
+        //     transform: Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0)),
+        //     ..default()
+        // });
+        cmds.entity(entity).insert_bundle(SceneBundle {
+            // scene: asset_server.load("tile.glb"),
             transform: Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0)),
             ..default()
         });
+    }
+}
+
+fn animate_light_direction(
+    time: Res<Time>,
+    mut query: Query<&mut Transform, With<DirectionalLight>>,
+) {
+    for mut transform in &mut query {
+        transform.rotation = Quat::from_euler(
+            EulerRot::ZYX,
+            0.0,
+            time.seconds_since_startup() as f32 * std::f32::consts::TAU / 10.0,
+            -std::f32::consts::FRAC_PI_4,
+        );
+    }
+}
+
+fn animate_camera_direction(
+    time: Res<Time>,
+    mut query: Query<&mut Transform, With<DirectionalLight>>,
+) {
+    for mut transform in &mut query {
+        transform.rotation = Quat::from_euler(
+            EulerRot::ZYX,
+            0.0,
+            time.seconds_since_startup() as f32 * std::f32::consts::TAU / 10.0,
+            -std::f32::consts::FRAC_PI_4,
+        );
     }
 }
 
