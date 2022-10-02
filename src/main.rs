@@ -31,6 +31,7 @@ fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
         .add_plugin(InputManagerPlugin::<Action>::default())
+        .add_startup_system(default_lighting)
         .add_startup_system(default_camera)
         .add_startup_system(init_map)
         .add_system(simulate_surfaces);
@@ -43,32 +44,55 @@ enum Action {
     MoveCamera,
 }
 
+fn default_lighting(mut cmds: Commands<'_, '_>) {
+    const HALF_SIZE: f32 = 1.0; // TODO: learn about the magic of this magic number
+    cmds.spawn_bundle(DirectionalLightBundle {
+        // TODO: probably should be in draw.rs
+        directional_light: DirectionalLight {
+            shadow_projection: OrthographicProjection {
+                left: -HALF_SIZE,
+                right: HALF_SIZE,
+                bottom: -HALF_SIZE,
+                top: HALF_SIZE,
+                near: -10.0 * HALF_SIZE,
+                far: 10.0 * HALF_SIZE,
+                ..default()
+            },
+            shadows_enabled: true,
+            ..default()
+        },
+        ..default()
+    });
+}
 fn default_camera(mut cmds: Commands<'_, '_>) {
-    cmds.spawn_bundle(Camera2dBundle { ..default() })
-        .insert_bundle(InputManagerBundle {
-            action_state: ActionState::default(),
-            input_map: InputMap::default()
-                .insert(DualAxis::left_stick(), Action::MoveCamera)
-                .insert(
-                    VirtualDPad {
-                        up: InputKind::GamepadButton(GamepadButtonType::DPadUp),
-                        down: InputKind::GamepadButton(GamepadButtonType::DPadDown),
-                        left: InputKind::GamepadButton(GamepadButtonType::DPadLeft),
-                        right: InputKind::GamepadButton(GamepadButtonType::DPadRight),
-                    },
-                    Action::MoveCamera,
-                )
-                .insert(
-                    VirtualDPad {
-                        up: InputKind::Keyboard(KeyCode::W),
-                        down: InputKind::Keyboard(KeyCode::S),
-                        left: InputKind::Keyboard(KeyCode::A),
-                        right: InputKind::Keyboard(KeyCode::D),
-                    },
-                    Action::MoveCamera,
-                )
-                .build(),
-        });
+    cmds.spawn_bundle(Camera3dBundle {
+        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    })
+    .insert_bundle(InputManagerBundle {
+        action_state: ActionState::default(),
+        input_map: InputMap::default()
+            .insert(DualAxis::left_stick(), Action::MoveCamera)
+            .insert(
+                VirtualDPad {
+                    up: InputKind::GamepadButton(GamepadButtonType::DPadUp),
+                    down: InputKind::GamepadButton(GamepadButtonType::DPadDown),
+                    left: InputKind::GamepadButton(GamepadButtonType::DPadLeft),
+                    right: InputKind::GamepadButton(GamepadButtonType::DPadRight),
+                },
+                Action::MoveCamera,
+            )
+            .insert(
+                VirtualDPad {
+                    up: InputKind::Keyboard(KeyCode::W),
+                    down: InputKind::Keyboard(KeyCode::S),
+                    left: InputKind::Keyboard(KeyCode::A),
+                    right: InputKind::Keyboard(KeyCode::D),
+                },
+                Action::MoveCamera,
+            )
+            .build(),
+    });
 }
 
 fn init_map(mut cmds: Commands<'_, '_>) {
