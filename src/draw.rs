@@ -1,12 +1,20 @@
+use std::collections::HashSet;
+
 use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
 use bevy::{
     math::{vec2, vec3},
     prelude::*,
     sprite::Anchor,
+    utils::FixedState,
 };
 use leafwing_input_manager::prelude::*;
 // use std::f32::consts::PI;
 // use iyes_loopless::prelude::*;
+
+// FIXME stop `x10`'ing these numbers
+const HEX_WIDTH: f32 = 20.0;
+const HEX_HEIGHT: f32 = 17.0;
+const HEX_HORIZ_SPACING: f32 = 15.0;
 
 #[derive(Component, Copy, Clone, Eq, PartialEq)]
 struct RenderTileEntity {
@@ -49,23 +57,22 @@ fn update_render_entities(
     asset_server: Res<AssetServer>,
 ) {
     let camera_pos = camera.single();
-    let start_x = camera_pos.translation.x - window_size.0 / 2. - 32.;
-    let end_x = camera_pos.translation.x + window_size.0 / 2. + 32.;
-    let start_y = camera_pos.translation.y - window_size.1 / 2. - 32.;
-    let end_y = camera_pos.translation.y + window_size.1 / 2. + 32.;
+    let start_x = camera_pos.translation.x - window_size.0 / 2. - HEX_WIDTH;
+    let end_x = camera_pos.translation.x + window_size.0 / 2. + HEX_WIDTH;
+    let start_y = camera_pos.translation.y - window_size.1 / 2. - HEX_HEIGHT;
+    let end_y = camera_pos.translation.y + window_size.1 / 2. + HEX_HEIGHT;
 
-    let mut tiles = vec![];
-
+    let mut tiles = HashSet::with_hasher(FixedState);
     let mut current_y = 0;
-    while start_y + current_y as f32 * 32. <= end_y {
+    while start_y + current_y as f32 * HEX_HEIGHT <= end_y {
         let mut current_x = 0;
-        while start_x + current_x as f32 * 32. <= end_x {
-            let y_offset = (current_x % 2) * 16;
-            let x = start_x + current_x as f32 * 32.;
-            let y = start_y + current_y as f32 * 32. + y_offset as f32;
+        while start_x + current_x as f32 * HEX_HORIZ_SPACING <= end_x {
+            let y_offset = (current_x % 2) as f32 * HEX_HEIGHT / 2.0;
+            let x = start_x + current_x as f32 * HEX_HORIZ_SPACING;
+            let y = start_y + current_y as f32 * HEX_HEIGHT + y_offset;
 
             let hex_pos = pos_to_hex_pos(x, y);
-            tiles.push(hex_pos);
+            tiles.insert(hex_pos);
 
             current_x += 1;
         }
@@ -142,8 +149,8 @@ fn update_hexmap_render(
         //     ..default()
         // });
         cmds.entity(entity).insert(
-            Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0))
-                .with_scale(Vec3::ONE * 16.),
+            Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
+                .with_scale(Vec3::ONE * 10.25), // this should be `10` but then we get seams between edges because 3D sucks
         );
     }
 }
@@ -194,24 +201,23 @@ fn update_camera_pos(
     let hex_pos = pos_to_hex_pos(pos.translation.x, pos.translation.y);
     let wrapped_pos = crate::hexmap::wrap_hex_pos(hex_pos, map.width() as u32, map.height() as u32);
     if hex_pos != wrapped_pos {
-        let snapped_pos = hex_pos_to_pos(hex_pos, 32, 32);
+        let snapped_pos = hex_pos_to_pos(hex_pos);
         let offset = snapped_pos - pos.translation.truncate();
-        let new_pos = hex_pos_to_pos(wrapped_pos, 32, 32) - offset;
-        pos.translation = new_pos.extend(256.0);
+        let new_pos = hex_pos_to_pos(wrapped_pos) - offset;
+        pos.translation = new_pos.extend(128.0);
     }
 }
 
 /// x y should be in "world space", not screen space.
 fn pos_to_hex_pos(x: f32, y: f32) -> HexPos {
-    let x = f32::floor(x / 32.) as i32;
-    let y = y - x as f32 * 16.;
-    let y = f32::floor(y / 32.) as i32;
-    HexPos { q: x, r: y }
+    let q = f32::round(x / HEX_HORIZ_SPACING) as i32;
+    let vert_offset = q as f32 * HEX_HEIGHT / 2.0;
+    let r = f32::round((y - vert_offset) / HEX_HEIGHT) as i32;
+    HexPos { q, r }
 }
 
-fn hex_pos_to_pos(pos: HexPos, hex_width: u32, hex_height: u32) -> Vec2 {
-    assert_eq!(hex_height % 2, 0);
-    let x = pos.q * hex_width as i32;
-    let y = pos.r * hex_height as i32 + pos.q * (hex_height as i32 / 2);
-    vec2(x as f32, y as f32)
+fn hex_pos_to_pos(pos: HexPos) -> Vec2 {
+    let x = pos.q as f32 * HEX_HORIZ_SPACING;
+    let y = pos.q as f32 * HEX_HEIGHT / 2.0 + pos.r as f32 * HEX_HEIGHT;
+    vec2(x, y)
 }
