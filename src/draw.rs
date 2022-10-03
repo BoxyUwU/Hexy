@@ -4,6 +4,7 @@ use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
 use bevy::{
     math::{vec2, vec3},
     prelude::*,
+    render::{camera::Projection, primitives::Frustum},
     sprite::Anchor,
     utils::FixedState,
 };
@@ -11,10 +12,10 @@ use leafwing_input_manager::prelude::*;
 // use std::f32::consts::PI;
 // use iyes_loopless::prelude::*;
 
-// FIXME stop `x10`'ing these numbers
-const HEX_WIDTH: f32 = 20.0;
-const HEX_HEIGHT: f32 = 17.0;
-const HEX_HORIZ_SPACING: f32 = 15.0;
+// FIXME stop `x20`'ing these numbers
+const HEX_WIDTH: f32 = 40.0;
+const HEX_HEIGHT: f32 = 34.0;
+const HEX_HORIZ_SPACING: f32 = 30.0;
 
 #[derive(Component, Copy, Clone, Eq, PartialEq)]
 struct RenderTileEntity {
@@ -77,14 +78,19 @@ fn update_render_entities(
     mut cmds: Commands<'_, '_>,
     mut render_entities: Query<(Entity, &mut RenderTileEntity)>,
     window_size: Res<WindowSize>,
-    camera: Query<&Transform, With<Camera>>,
+    camera: Query<(&Transform, &Frustum), With<Camera>>,
     asset_server: Res<AssetServer>,
 ) {
-    let camera_pos = camera.single();
-    let start_x = camera_pos.translation.x - window_size.0 / 2. - HEX_WIDTH;
-    let end_x = camera_pos.translation.x + window_size.0 / 2. + HEX_WIDTH;
-    let start_y = camera_pos.translation.y - window_size.1 / 2. - HEX_HEIGHT;
-    let end_y = camera_pos.translation.y + window_size.1 / 2. + HEX_HEIGHT;
+    let plane_center = {
+        let (camera_pos, camera_frustum) = camera.single();
+        let ray_dir = camera_frustum.planes[4].normal();
+        ray_intersects_xy_plane(0.0, camera_pos.translation, ray_dir.into()).unwrap()
+    };
+
+    let start_x = plane_center.x - window_size.0 / 2. - HEX_WIDTH * 2.;
+    let end_x = plane_center.x + window_size.0 / 2. + HEX_WIDTH * 2.;
+    let start_y = plane_center.y - window_size.1 / 2. - HEX_HEIGHT * 2.;
+    let end_y = plane_center.y + window_size.1 / 2. + HEX_HEIGHT * 2.;
 
     let mut tiles = HashSet::with_hasher(FixedState);
     let mut current_y = 0;
@@ -174,7 +180,7 @@ fn update_hexmap_render(
         // });
         cmds.entity(entity).insert(
             Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
-                .with_scale(Vec3::ONE * 10.25), // this should be `10` but then we get seams between edges because 3D sucks
+                .with_scale(Vec3::ONE * 20.25), // this should be `20` but then we get seams between edges because 3D sucks
         );
     }
 }
@@ -200,7 +206,7 @@ fn update_camera_pos(
         let snapped_pos = hex_pos_to_pos(hex_pos);
         let offset = snapped_pos - pos.translation.truncate();
         let new_pos = hex_pos_to_pos(wrapped_pos) - offset;
-        pos.translation = new_pos.extend(128.0);
+        pos.translation = new_pos.extend(pos.translation.z);
     }
 }
 
@@ -216,4 +222,16 @@ fn hex_pos_to_pos(pos: HexPos) -> Vec2 {
     let x = pos.q as f32 * HEX_HORIZ_SPACING;
     let y = pos.q as f32 * HEX_HEIGHT / 2.0 + pos.r as f32 * HEX_HEIGHT;
     vec2(x, y)
+}
+
+fn ray_intersects_xy_plane(plane_z: f32, ray_pos: Vec3, ray_dir: Vec3) -> Option<Vec2> {
+    if (ray_pos.z < plane_z && ray_dir.z < 0.0) || (ray_pos.z > plane_z && ray_dir.z > 0.0) {
+        return None;
+    }
+
+    let dist_z = (plane_z - ray_pos.z).abs();
+    Some(vec2(
+        ray_pos.x + ray_dir.x * dist_z,
+        ray_pos.y + ray_dir.y * dist_z,
+    ))
 }

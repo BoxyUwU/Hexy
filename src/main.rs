@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::Projection};
 use hexmap::HexMap;
 use leafwing_input_manager::{prelude::*, user_input::InputKind};
 use surfaces::{SelectedSurface, Surfaces};
@@ -45,7 +45,11 @@ enum Action {
 
 fn default_camera(mut cmds: Commands<'_, '_>) {
     cmds.spawn_bundle(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, -128.0, 128.0).looking_at(Vec3::ZERO, Vec3::Z),
+        transform: Transform::from_xyz(0.0, -512.0, 512.0).looking_at(Vec3::ZERO, Vec3::Z),
+        projection: Projection::Orthographic(OrthographicProjection {
+            scale: 0.5,
+            ..default()
+        }),
         ..default()
     })
     .insert_bundle(InputManagerBundle {
