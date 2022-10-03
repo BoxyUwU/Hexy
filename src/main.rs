@@ -66,7 +66,7 @@ fn default_lighting(mut cmds: Commands<'_, '_>) {
 }
 fn default_camera(mut cmds: Commands<'_, '_>) {
     cmds.spawn_bundle(Camera3dBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(0.0, -256.0, 256.0).looking_at(Vec3::ZERO, Vec3::Z),
         ..default()
     })
     .insert_bundle(InputManagerBundle {
