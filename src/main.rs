@@ -1,4 +1,8 @@
-use bevy::{prelude::*, render::camera::Projection};
+use bevy::{
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    prelude::*,
+    render::camera::Projection,
+};
 use hexmap::HexMap;
 use leafwing_input_manager::{prelude::*, user_input::InputKind};
 use surfaces::{SelectedSurface, Surfaces};
@@ -33,7 +37,11 @@ fn main() {
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_startup_system(default_camera)
         .add_startup_system(init_map)
-        .add_system(simulate_surfaces);
+        .add_system(simulate_surfaces)
+        // Adds frame time diagnostics
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        // Adds a system that prints diagnostics to the console
+        .add_plugin(LogDiagnosticsPlugin::default());
     draw::init_app(&mut app);
     app.run();
 }
