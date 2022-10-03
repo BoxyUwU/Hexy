@@ -34,8 +34,32 @@ pub fn init_app(app: &mut App) {
         color: Color::WHITE,
         brightness: 1.0 / 5.0f32,
     });
+    app.add_startup_system(|mut cmds: Commands<'_, '_>| {
+        const HALF_SIZE: f32 = 1.0; // TODO: learn about the magic of this magic number
+        cmds.spawn_bundle(DirectionalLightBundle {
+            transform: Transform::default().with_rotation(Quat::from_euler(
+                EulerRot::ZYX,
+                0.0,
+                2.0 as f32 * std::f32::consts::TAU / 10.0,
+                -std::f32::consts::FRAC_PI_4,
+            )),
+            directional_light: DirectionalLight {
+                shadow_projection: OrthographicProjection {
+                    left: -HALF_SIZE,
+                    right: HALF_SIZE,
+                    bottom: -HALF_SIZE,
+                    top: HALF_SIZE,
+                    near: -10.0 * HALF_SIZE,
+                    far: 10.0 * HALF_SIZE,
+                    ..default()
+                },
+                shadows_enabled: true,
+                ..default()
+            },
+            ..default()
+        });
+    });
     app.add_system(update_camera_pos)
-        .add_system(animate_light_direction)
         .add_system(update_window_size.after(update_camera_pos))
         .add_system(update_render_entities.after(update_window_size))
         .add_system(update_hexmap_render.after(update_render_entities));
@@ -151,34 +175,6 @@ fn update_hexmap_render(
         cmds.entity(entity).insert(
             Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
                 .with_scale(Vec3::ONE * 10.25), // this should be `10` but then we get seams between edges because 3D sucks
-        );
-    }
-}
-
-fn animate_light_direction(
-    time: Res<Time>,
-    mut query: Query<&mut Transform, With<DirectionalLight>>,
-) {
-    for mut transform in &mut query {
-        transform.rotation = Quat::from_euler(
-            EulerRot::ZYX,
-            0.0,
-            time.seconds_since_startup() as f32 * std::f32::consts::TAU / 10.0,
-            -std::f32::consts::FRAC_PI_4,
-        );
-    }
-}
-
-fn animate_camera_direction(
-    time: Res<Time>,
-    mut query: Query<&mut Transform, With<DirectionalLight>>,
-) {
-    for mut transform in &mut query {
-        transform.rotation = Quat::from_euler(
-            EulerRot::ZYX,
-            0.0,
-            time.seconds_since_startup() as f32 * std::f32::consts::TAU / 10.0,
-            -std::f32::consts::FRAC_PI_4,
         );
     }
 }
