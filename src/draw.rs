@@ -1,5 +1,9 @@
 use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
-use bevy::{math::vec2, prelude::*, sprite::Anchor};
+use bevy::{
+    math::{vec2, vec3},
+    prelude::*,
+    sprite::Anchor,
+};
 use leafwing_input_manager::prelude::*;
 // use std::f32::consts::PI;
 // use iyes_loopless::prelude::*;
@@ -82,7 +86,7 @@ fn update_render_entities(
                     r: tile.r,
                 },))
                     .insert_bundle(SceneBundle {
-                        scene: asset_server.load("tile.glb"),
+                        scene: asset_server.load("tile.glb#Scene0"),
                         ..default()
                     });
             }
@@ -137,11 +141,10 @@ fn update_hexmap_render(
         //     transform: Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0)),
         //     ..default()
         // });
-        cmds.entity(entity).insert_bundle(SceneBundle {
-            // scene: asset_server.load("tile.glb"),
-            transform: Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0)),
-            ..default()
-        });
+        cmds.entity(entity).insert(
+            Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0))
+                .with_scale(Vec3::ONE * 16.),
+        );
     }
 }
 
@@ -194,7 +197,7 @@ fn update_camera_pos(
         let snapped_pos = hex_pos_to_pos(hex_pos, 32, 32);
         let offset = snapped_pos - pos.translation.truncate();
         let new_pos = hex_pos_to_pos(wrapped_pos, 32, 32) - offset;
-        pos.translation = new_pos.extend(0.0);
+        pos.translation = new_pos.extend(256.0);
     }
 }
 
