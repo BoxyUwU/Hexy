@@ -128,9 +128,8 @@ fn update_render_entities(
 }
 
 fn update_hexmap_render(
-    render_tiles: Query<(Entity, &RenderTileEntity)>,
+    mut render_tiles: Query<(&RenderTileEntity, &mut Transform), Without<Camera>>,
     camera: Query<&Transform, With<Camera>>,
-    mut cmds: Commands<'_, '_>,
     map: CurrentHexMap<'_, '_>,
     window: Res<Windows>,
     asset_server: Res<AssetServer>,
@@ -149,7 +148,7 @@ fn update_hexmap_render(
     };
     let selected_hex = crate::hexmap::wrap_hex_pos(selected_hex, 16, 16);
 
-    for (entity, render_tile) in render_tiles.iter() {
+    for (render_tile, mut transform) in render_tiles.iter_mut() {
         let tile_pos = HexPos {
             q: render_tile.q,
             r: render_tile.r,
@@ -172,10 +171,8 @@ fn update_hexmap_render(
         //     transform: Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0)),
         //     ..default()
         // });
-        cmds.entity(entity).insert(
-            Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
-                .with_scale(Vec3::ONE * 20.25), // this should be `20` but then we get seams between edges because 3D sucks
-        );
+        *transform = Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
+            .with_scale(Vec3::ONE * 20.25); // this should be `20` but then we get seams between edges because 3D sucks
     }
 }
 
