@@ -1,13 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
-use bevy::{
-    math::{vec2, vec3},
-    prelude::*,
-    render::{camera::Projection, primitives::Frustum},
-    sprite::Anchor,
-    utils::FixedState,
-};
+use bevy::{math::vec2, prelude::*, render::primitives::Frustum, utils::FixedState};
 use leafwing_input_manager::prelude::*;
 // use std::f32::consts::PI;
 // use iyes_loopless::prelude::*;
