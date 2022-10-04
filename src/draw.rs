@@ -226,7 +226,8 @@ fn color_scene_entities(
     scene_to_color: Query<Entity, With<SceneToColor>>,
     children: Query<&Children>,
     mut transforms: Query<&mut Transform>,
-    mut materials: Query<&mut Material>,
+    materials: Query<&Handle<StandardMaterial>>,
+    mut assets: ResMut<Assets<StandardMaterial>>,
 ) {
     for color_scene_entity in &scene_to_color {
         let mut offset = 0.;
@@ -239,13 +240,13 @@ fn color_scene_entities(
                 );
                 offset += 1.0;
             }
-            if let Ok(mut material) = transforms.get_mut(entity) {
-                material.translation = Vec3::new(
-                    offset * time.seconds_since_startup().sin() as f32 / 20.,
-                    0.,
-                    time.seconds_since_startup().cos() as f32 / 20.,
-                );
-                // offset += 1.0;
+            if let Ok(material) = materials.get(entity) {
+                if let Some(mut mat) = assets.get_mut(material) {
+                    mat.base_color = match (time.seconds_since_startup() as u32 % 2) == 1 {
+                        true => Color::RED,
+                        false => Color::BLUE,
+                    };
+                }
             }
         });
     }
