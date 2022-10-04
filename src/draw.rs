@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
 use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
-use bevy::{math::vec2, prelude::*, render::primitives::Frustum, utils::FixedState};
+use bevy::{
+    math::vec2, prelude::*, render::mesh::VertexAttributeValues, render::primitives::Frustum,
+    utils::FixedState,
+};
 use leafwing_input_manager::prelude::*;
 // use std::f32::consts::PI;
 // use iyes_loopless::prelude::*;
@@ -54,7 +57,8 @@ pub fn init_app(app: &mut App) {
             ..default()
         });
     });
-    app.add_system(update_camera_pos)
+    app.add_system(color_scene_entities)
+        .add_system(update_camera_pos.after(color_scene_entities))
         .add_system(update_window_size.after(update_camera_pos))
         .add_system(update_render_entities.after(update_window_size));
 }
@@ -120,7 +124,8 @@ fn update_render_entities(
                     .insert_bundle(SceneBundle {
                         scene: asset_server.load("tile.glb#Scene0"),
                         ..default()
-                    });
+                    })
+                    .insert(SceneToColor);
             }
             (Some((entity, _, _)), None) => cmds.entity(entity).despawn(),
             (None, None) => break,
@@ -209,4 +214,46 @@ fn ray_intersects_xy_plane(plane_z: f32, ray_pos: Vec3, ray_dir: Vec3) -> Option
         ray_pos.x + ray_dir.x * dist_z,
         ray_pos.y + ray_dir.y * dist_z,
     ))
+}
+
+#[derive(Component)]
+struct SceneToColor;
+
+fn color_scene_entities(
+    time: Res<Time>,
+    scene_to_color: Query<Entity, With<SceneToColor>>,
+    children: Query<&Children>,
+    mut transforms: Query<&mut Transform>,
+    mut materials: Query<&mut Material>,
+) {
+    for color_scene_entity in &scene_to_color {
+        let mut offset = 0.;
+        iter_hierarchy(color_scene_entity, &children, &mut |entity| {
+            if let Ok(mut transform) = transforms.get_mut(entity) {
+                transform.translation = Vec3::new(
+                    offset * time.seconds_since_startup().sin() as f32 / 20.,
+                    0.,
+                    time.seconds_since_startup().cos() as f32 / 20.,
+                );
+                offset += 1.0;
+            }
+            if let Ok(mut material) = transforms.get_mut(entity) {
+                material.translation = Vec3::new(
+                    offset * time.seconds_since_startup().sin() as f32 / 20.,
+                    0.,
+                    time.seconds_since_startup().cos() as f32 / 20.,
+                );
+                // offset += 1.0;
+            }
+        });
+    }
+}
+
+fn iter_hierarchy(entity: Entity, children_query: &Query<&Children>, f: &mut impl FnMut(Entity)) {
+    (f)(entity);
+    if let Ok(children) = children_query.get(entity) {
+        for child in children.iter().copied() {
+            iter_hierarchy(child, children_query, f);
+        }
+    }
 }
