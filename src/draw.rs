@@ -218,6 +218,8 @@ fn ray_intersects_xy_plane(plane_z: f32, ray_pos: Vec3, ray_dir: Vec3) -> Option
 
 #[derive(Component)]
 struct SceneToColor;
+// Reference: https://github.com/bevyengine/bevy/blob/release-0.8.1/examples/3d/update_gltf_scene.rs
+// Reference: https://github.com/bevyengine/bevy/blob/release-0.8.1/examples/3d/vertex_colors.rs
 
 fn color_scene_entities(
     time: Res<Time>,
