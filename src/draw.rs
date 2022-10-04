@@ -56,8 +56,7 @@ pub fn init_app(app: &mut App) {
     });
     app.add_system(update_camera_pos)
         .add_system(update_window_size.after(update_camera_pos))
-        .add_system(update_render_entities.after(update_window_size))
-        .add_system(update_hexmap_render.after(update_render_entities));
+        .add_system(update_render_entities.after(update_window_size));
 }
 
 fn update_window_size(mut window_size: ResMut<WindowSize>, windows: Res<Windows>) {
@@ -70,10 +69,12 @@ fn update_window_size(mut window_size: ResMut<WindowSize>, windows: Res<Windows>
 
 fn update_render_entities(
     mut cmds: Commands<'_, '_>,
-    mut render_entities: Query<(Entity, &mut RenderTileEntity)>,
+    mut render_entities: Query<(Entity, &mut RenderTileEntity, &mut Transform), Without<Camera>>,
     window_size: Res<WindowSize>,
     camera: Query<(&Transform, &Frustum), With<Camera>>,
     asset_server: Res<AssetServer>,
+    map: CurrentHexMap<'_, '_>,
+    window: Res<Windows>,
 ) {
     let plane_center = {
         let (camera_pos, camera_frustum) = camera.single();
@@ -107,7 +108,7 @@ fn update_render_entities(
 
     loop {
         match (query_iter.next(), tile_iter.next()) {
-            (Some((_, mut tile_pos)), Some(tile)) => {
+            (Some((_, mut tile_pos, _)), Some(tile)) => {
                 tile_pos.q = tile.q;
                 tile_pos.r = tile.r;
             }
@@ -121,22 +122,15 @@ fn update_render_entities(
                         ..default()
                     });
             }
-            (Some((entity, _)), None) => cmds.entity(entity).despawn(),
+            (Some((entity, _, _)), None) => cmds.entity(entity).despawn(),
             (None, None) => break,
         }
     }
-}
 
-fn update_hexmap_render(
-    mut render_tiles: Query<(&RenderTileEntity, &mut Transform), Without<Camera>>,
-    camera: Query<&Transform, With<Camera>>,
-    map: CurrentHexMap<'_, '_>,
-    window: Res<Windows>,
-    asset_server: Res<AssetServer>,
-) {
     let map = map.hexmap();
 
-    let cam_pos = camera.single();
+    let camera = camera.single();
+    let cam_pos = camera.0;
     let window = window.get_primary().unwrap();
 
     let selected_hex = match window.cursor_position() {
@@ -148,7 +142,7 @@ fn update_hexmap_render(
     };
     let selected_hex = crate::hexmap::wrap_hex_pos(selected_hex, 16, 16);
 
-    for (render_tile, mut transform) in render_tiles.iter_mut() {
+    for (_, render_tile, mut transform) in render_entities.iter_mut() {
         let tile_pos = HexPos {
             q: render_tile.q,
             r: render_tile.r,
@@ -161,16 +155,6 @@ fn update_hexmap_render(
             false => tile.kind.color(),
         };
 
-        // cmds.entity(entity).insert_bundle(SpriteBundle {
-        //     sprite: Sprite {
-        //         color,
-        //         custom_size: Some(vec2(30., 30.)),
-        //         anchor: Anchor::BottomLeft,
-        //         ..default()
-        //     },
-        //     transform: Transform::from_translation(hex_pos_to_pos(tile_pos, 32, 32).extend(0.0)),
-        //     ..default()
-        // });
         *transform = Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
             .with_scale(Vec3::ONE * 20.25); // this should be `20` but then we get seams between edges because 3D sucks
     }
