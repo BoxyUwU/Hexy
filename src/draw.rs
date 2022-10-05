@@ -2,7 +2,11 @@ use std::collections::HashSet;
 
 use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
 use bevy::{
-    math::vec2, prelude::*, render::mesh::VertexAttributeValues, render::primitives::Frustum,
+    gltf::{Gltf, GltfMesh},
+    math::vec2,
+    prelude::*,
+    render::mesh::VertexAttributeValues,
+    render::primitives::Frustum,
     utils::FixedState,
 };
 use leafwing_input_manager::prelude::*;
@@ -57,6 +61,7 @@ pub fn init_app(app: &mut App) {
             ..default()
         });
     });
+    app.add_startup_system(load_hex_gltf);
     app.add_system(color_scene_entities)
         .add_system(update_camera_pos.after(color_scene_entities))
         .add_system(update_window_size.after(update_camera_pos))
@@ -68,6 +73,73 @@ fn update_window_size(mut window_size: ResMut<WindowSize>, windows: Res<Windows>
     let size = WindowSize(window.width(), window.height());
     if *window_size != size {
         *window_size = size;
+    }
+}
+
+// Drawing from: https://bevy-cheatbook.github.io/3d/gltf.html
+struct HexObjectAsset(Handle<Gltf>);
+
+// Helper for outlining an area to be hexified/covered in hex visuals
+struct HexRect {
+    q: i32,
+    r: i32,
+    width: i32,
+    height: i32,
+}
+
+impl HexRect {
+    fn new(q: i32, r: i32, width: i32, height: i32) -> HexRect {
+        HexRect {
+            q,
+            r,
+            width,
+            height,
+        }
+    }
+
+    // Note: inclusive
+    fn is_in_rect(&self, q: i32, r: i32) -> bool {
+        q >= self.q && q <= self.q + self.width && r >= self.r && r <= self.r + self.height
+    }
+
+    // Adds padding around the rect to ensure hexes are drawn just
+    // offscreen to prevent visual glitches when moving quickly
+    fn is_in_padded_rect(&self, q: i32, r: i32, padding: i32) -> bool {
+        let padded_rect = HexRect::new(
+            self.q - padding,
+            self.r - padding,
+            self.width + padding,
+            self.height + padding,
+        );
+        padded_rect.is_in_rect(q, r)
+    }
+}
+
+fn load_hex_gltf(mut cmds: Commands, asset_server: Res<AssetServer>) {
+    let gltf = asset_server.load("tile.glb");
+    cmds.insert_resource(HexObjectAsset(gltf));
+    // TODO: HexRect probably could use some unit tests
+    // let test = HexRect::new(4, 5, 1, 9);
+}
+
+fn create_hex_visual(
+    mut cmds: Commands,
+    hex_object_asset: Res<HexObjectAsset>,
+    assets_gltf: Res<Assets<Gltf>>,
+    assets_gltfmesh: Res<Assets<GltfMesh>>,
+) {
+    if let Some(gltf) = assets_gltf.get(&hex_object_asset.0) {
+        // Get the GLTF Mesh
+        // (unwrap safety: we know the GLTF has loaded already)
+        let hex_visual = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
+
+        // Spawn a PBR entity with the mesh and material of the first GLTF Primitive
+        cmds.spawn_bundle(PbrBundle {
+            mesh: hex_visual.primitives[0].mesh.clone(),
+            // (unwrap: material is optional, we assume this primitive has one)
+            material: hex_visual.primitives[0].material.clone().unwrap(),
+            ..Default::default()
+        });
     }
 }
 
@@ -126,6 +198,8 @@ fn update_render_entities(
                         ..default()
                     })
                     .insert(SceneToColor);
+                // TODO: use create_hex_visual here to instead create hex visuals
+                // TODO: separate this out into a system that creates and manages a pool of hex meshes, and this system which moves and updates them as needed
             }
             (Some((entity, _, _)), None) => cmds.entity(entity).despawn(),
             (None, None) => break,
@@ -240,14 +314,14 @@ fn color_scene_entities(
             //     );
             //     offset += 1.0;
             // }
-            // if let Ok(material) = materials.get(entity) {
-            //     if let Some(mut mat) = assets.get_mut(material) {
-            //         mat.base_color = match offset as u32 % 2 == 1 {
-            //             true => Color::RED,
-            //             false => Color::BLUE,
-            //         };
-            //     }
-            // }
+            if let Ok(material) = materials.get(entity) {
+                if let Some(mut mat) = assets.get_mut(material) {
+                    mat.base_color = match offset as u32 % 2 == 1 {
+                        true => Color::RED,
+                        false => Color::BLUE,
+                    };
+                }
+            }
         });
     }
 }
