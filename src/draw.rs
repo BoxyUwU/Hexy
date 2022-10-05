@@ -232,22 +232,22 @@ fn color_scene_entities(
     for color_scene_entity in &scene_to_color {
         let mut offset = 0.;
         iter_hierarchy(color_scene_entity, &children, &mut |entity| {
-            if let Ok(mut transform) = transforms.get_mut(entity) {
-                transform.translation = Vec3::new(
-                    offset * time.seconds_since_startup().sin() as f32 / 20.,
-                    0.,
-                    time.seconds_since_startup().cos() as f32 / 20.,
-                );
-                offset += 1.0;
-            }
-            if let Ok(material) = materials.get(entity) {
-                if let Some(mut mat) = assets.get_mut(material) {
-                    mat.base_color = match (time.seconds_since_startup() as u32 % 2) == 1 {
-                        true => Color::RED,
-                        false => Color::BLUE,
-                    };
-                }
-            }
+            // if let Ok(mut transform) = transforms.get_mut(entity) {
+            //     transform.translation = Vec3::new(
+            //         offset * time.seconds_since_startup().sin() as f32 / 20.,
+            //         0.,
+            //         time.seconds_since_startup().cos() as f32 / 20.,
+            //     );
+            //     offset += 1.0;
+            // }
+            // if let Ok(material) = materials.get(entity) {
+            //     if let Some(mut mat) = assets.get_mut(material) {
+            //         mat.base_color = match offset as u32 % 2 == 1 {
+            //             true => Color::RED,
+            //             false => Color::BLUE,
+            //         };
+            //     }
+            // }
         });
     }
 }
