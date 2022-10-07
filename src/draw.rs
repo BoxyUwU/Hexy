@@ -15,6 +15,10 @@ use iyes_loopless::prelude::*;
 use leafwing_input_manager::{prelude::*, user_input::InputKind};
 // use std::f32::consts::PI;
 
+// this should be `20` but then we get seams between edges because 3D sucks
+// like, a lot
+const HEX_SCALAR: f32 = 20.25;
+
 // FIXME stop `x20`'ing these numbers
 const HEX_WIDTH: f32 = 40.0;
 const HEX_HEIGHT: f32 = 34.0;
@@ -224,7 +228,6 @@ fn update_render_entities(
     }
     let mut tile_iter = tiles.into_iter();
     let mut query_iter = render_entities.iter_mut();
-
     loop {
         match (query_iter.next(), tile_iter.next()) {
             (Some((_, mut tile_pos)), Some(tile)) => {
@@ -242,6 +245,7 @@ fn update_render_entities(
             (None, None) => break,
         }
     }
+    println!("{}", render_entities.iter_mut().count());
 
     let map = map.hexmap();
 
@@ -276,7 +280,7 @@ fn update_render_entities(
 
         cmds.entity(entity).insert_bundle(PbrBundle {
             transform: Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
-                .with_scale(Vec3::ONE * 20.25), // this should be `20` but then we get seams between edges because 3D sucks
+                .with_scale(Vec3::ONE * HEX_SCALAR),
             mesh,
             material,
             ..default()
