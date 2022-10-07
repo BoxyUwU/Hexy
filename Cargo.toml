@@ -9,6 +9,7 @@ edition = "2021"
 bevy = "0.8.1"
 leafwing-input-manager = "0.5.2"
 iyes_loopless = "0.7"
+bevy-inspector-egui = "0.13.0"
 
 [workspace]
 resolver = "2"
