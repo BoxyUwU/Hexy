@@ -1,10 +1,12 @@
 use std::marker::PhantomData;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy_inspector_egui::Inspectable;
 
 use crate::{hexmap::HexMap, simulation::MyTileData};
 
-/// Runs a bunch of systems sequentailyl with no parallelism, flushing commands after each system runs
+/// Runs a bunch of systems sequentially with no parallelism, flushing commands after each system runs
+// Not Inspectable because...Rust magic?
 pub struct SimpleSchedule {
     systems: Vec<Box<dyn System<In = (), Out = ()> + Send + Sync>>,
 }
@@ -36,6 +38,7 @@ impl SimpleSchedule {
     }
 }
 
+// Also not Inspectable because Rust magic
 pub struct Surfaces {
     surfaces: Vec<(SimpleSchedule, World)>,
     existing_system_ctors:
@@ -87,8 +90,10 @@ impl Surfaces {
     }
 }
 
+#[derive(Debug, Inspectable)]
 pub struct SelectedSurface(pub usize);
 
+// Not Inspectable due to Rust magic
 #[derive(SystemParam)]
 pub struct CurrentHexMap<'w, 's> {
     selected: Res<'w, SelectedSurface>,
