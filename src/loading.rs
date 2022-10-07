@@ -1,9 +1,11 @@
 use bevy::{gltf::Gltf, prelude::*};
+use bevy_inspector_egui::Inspectable;
 use iyes_loopless::prelude::*;
 
 use crate::AppState;
 
 // Drawing from: https://bevy-cheatbook.github.io/3d/gltf.html
+// Note: Gltf is not Inspectable
 pub struct HexObjectAsset(pub Handle<Gltf>);
 
 pub fn init_app(app: &mut App) {

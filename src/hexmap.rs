@@ -1,10 +1,14 @@
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+use bevy_inspector_egui::Inspectable;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Inspectable)]
 pub struct HexPos {
     pub q: i32,
     pub r: i32,
 }
 
 // dont `derive(Default)` the `tiles` field will have length 0
+// Not Inspectable because of Box<[T]>
+#[derive(Debug)]
 pub struct HexMap<T> {
     width: usize,
     height: usize,

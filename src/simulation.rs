@@ -4,13 +4,15 @@ use crate::{
     AppState,
 };
 use bevy::prelude::*;
+use bevy_inspector_egui::Inspectable;
 use iyes_loopless::prelude::*;
 
+#[derive(Debug, Inspectable)]
 pub struct MyTileData {
     pub kind: TileKind,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Inspectable)]
 pub enum TileKind {
     Water,
     Rock,

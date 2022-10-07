@@ -11,6 +11,7 @@ use bevy::{
     render::{camera::Projection, primitives::Frustum},
     utils::FixedState,
 };
+use bevy_inspector_egui::Inspectable;
 use iyes_loopless::prelude::*;
 use leafwing_input_manager::{prelude::*, user_input::InputKind};
 // use std::f32::consts::PI;
@@ -24,7 +25,7 @@ const HEX_WIDTH: f32 = 40.0;
 const HEX_HEIGHT: f32 = 34.0;
 const HEX_HORIZ_SPACING: f32 = 30.0;
 
-#[derive(Component, Copy, Clone, Eq, PartialEq)]
+#[derive(Component, Copy, Clone, Eq, PartialEq, Debug, Inspectable)]
 struct RenderTileEntity {
     q: i32,
     r: i32,
@@ -84,7 +85,7 @@ pub fn init_app(app: &mut App) {
     .add_enter_system(AppState::Loading, default_camera);
 }
 
-#[derive(Actionlike, Copy, Clone)]
+#[derive(Actionlike, Copy, Clone, Debug, Inspectable)]
 enum Action {
     MoveCamera,
 }
@@ -125,6 +126,7 @@ fn default_camera(mut cmds: Commands<'_, '_>) {
 }
 
 // Helper for outlining an area to be hexified/covered in hex visuals
+#[derive(Debug, Inspectable)]
 struct HexRect {
     q: i32,
     r: i32,

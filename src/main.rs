@@ -11,7 +11,7 @@ pub mod loading;
 pub mod simulation;
 pub mod surfaces;
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, Inspectable)]
 pub enum AppState {
     Loading,
     Playing,
