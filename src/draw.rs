@@ -1,17 +1,19 @@
 use std::collections::HashSet;
 
-use crate::{hexmap::HexPos, surfaces::CurrentHexMap, Action};
+use crate::{
+    hexmap::HexPos, loading::HexObjectAsset, simulation::TileKind, surfaces::CurrentHexMap,
+    AppState,
+};
 use bevy::{
     gltf::{Gltf, GltfMesh},
     math::vec2,
     prelude::*,
-    render::mesh::VertexAttributeValues,
-    render::primitives::Frustum,
+    render::{camera::Projection, primitives::Frustum},
     utils::FixedState,
 };
-use leafwing_input_manager::prelude::*;
+use iyes_loopless::prelude::*;
+use leafwing_input_manager::{prelude::*, user_input::InputKind};
 // use std::f32::consts::PI;
-// use iyes_loopless::prelude::*;
 
 // FIXME stop `x20`'ing these numbers
 const HEX_WIDTH: f32 = 40.0;
@@ -28,6 +30,7 @@ struct RenderTileEntity {
 struct WindowSize(f32, f32);
 
 pub fn init_app(app: &mut App) {
+    app.add_plugin(InputManagerPlugin::<Action>::default());
     app.add_startup_system(|mut cmds: Commands<'_, '_>, windows: Res<Windows>| {
         let window = windows.get_primary().unwrap();
         cmds.insert_resource(WindowSize(window.width(), window.height()));
@@ -61,23 +64,61 @@ pub fn init_app(app: &mut App) {
             ..default()
         });
     });
-    app.add_startup_system(load_hex_gltf);
-    app.add_system(color_scene_entities)
-        .add_system(update_camera_pos.after(color_scene_entities))
-        .add_system(update_window_size.after(update_camera_pos))
-        .add_system(update_render_entities.after(update_window_size));
+    #[derive(SystemLabel)]
+    struct UpdateCameraPos;
+    app.add_system(
+        update_camera_pos
+            .run_in_state(AppState::Playing)
+            .label(UpdateCameraPos),
+    )
+    .add_system(
+        update_render_entities
+            .run_in_state(AppState::Playing)
+            .after(UpdateCameraPos),
+    )
+    // FIXME this ought to be AppState::Playing but no instant commands Sigh bevy
+    .add_enter_system(AppState::Loading, default_camera);
 }
 
-fn update_window_size(mut window_size: ResMut<WindowSize>, windows: Res<Windows>) {
-    let window = windows.get_primary().unwrap();
-    let size = WindowSize(window.width(), window.height());
-    if *window_size != size {
-        *window_size = size;
-    }
+#[derive(Actionlike, Copy, Clone)]
+enum Action {
+    MoveCamera,
 }
 
-// Drawing from: https://bevy-cheatbook.github.io/3d/gltf.html
-struct HexObjectAsset(Handle<Gltf>);
+fn default_camera(mut cmds: Commands<'_, '_>) {
+    cmds.spawn_bundle(Camera3dBundle {
+        transform: Transform::from_xyz(0.0, -512.0, 512.0).looking_at(Vec3::ZERO, Vec3::Z),
+        projection: Projection::Orthographic(OrthographicProjection {
+            scale: 0.5,
+            ..default()
+        }),
+        ..default()
+    })
+    .insert_bundle(InputManagerBundle {
+        action_state: ActionState::default(),
+        input_map: InputMap::default()
+            .insert(DualAxis::left_stick(), Action::MoveCamera)
+            .insert(
+                VirtualDPad {
+                    up: InputKind::GamepadButton(GamepadButtonType::DPadUp),
+                    down: InputKind::GamepadButton(GamepadButtonType::DPadDown),
+                    left: InputKind::GamepadButton(GamepadButtonType::DPadLeft),
+                    right: InputKind::GamepadButton(GamepadButtonType::DPadRight),
+                },
+                Action::MoveCamera,
+            )
+            .insert(
+                VirtualDPad {
+                    up: InputKind::Keyboard(KeyCode::W),
+                    down: InputKind::Keyboard(KeyCode::S),
+                    left: InputKind::Keyboard(KeyCode::A),
+                    right: InputKind::Keyboard(KeyCode::D),
+                },
+                Action::MoveCamera,
+            )
+            .build(),
+    });
+}
 
 // Helper for outlining an area to be hexified/covered in hex visuals
 struct HexRect {
@@ -115,42 +156,44 @@ impl HexRect {
     }
 }
 
-fn load_hex_gltf(mut cmds: Commands, asset_server: Res<AssetServer>) {
-    let gltf = asset_server.load("tile.glb");
-    cmds.insert_resource(HexObjectAsset(gltf));
-    // TODO: HexRect probably could use some unit tests
-    // let test = HexRect::new(4, 5, 1, 9);
-}
-
 fn create_hex_visual(
-    mut cmds: Commands,
-    hex_object_asset: Res<HexObjectAsset>,
-    assets_gltf: Res<Assets<Gltf>>,
-    assets_gltfmesh: Res<Assets<GltfMesh>>,
-) {
-    if let Some(gltf) = assets_gltf.get(&hex_object_asset.0) {
-        // Get the GLTF Mesh
-        // (unwrap safety: we know the GLTF has loaded already)
-        let hex_visual = assets_gltfmesh.get(&gltf.meshes[0]).unwrap();
+    selected: bool,
+    tile_kind: TileKind,
+    hex_object_asset: &HexObjectAsset,
+    assets_gltf: &Assets<Gltf>,
+    assets_gltfmesh: &Assets<GltfMesh>,
+) -> (Handle<Mesh>, Handle<StandardMaterial>) {
+    // (unwrap safety: we know the GLTF has loaded already)
+    let gltf = assets_gltf.get(&hex_object_asset.0).unwrap();
+    let hex_visual = assets_gltfmesh
+        .get(&gltf.named_meshes["Cylinder".into()])
+        .unwrap();
 
-        // Spawn a PBR entity with the mesh and material of the first GLTF Primitive
-        cmds.spawn_bundle(PbrBundle {
-            mesh: hex_visual.primitives[0].mesh.clone(),
-            // (unwrap: material is optional, we assume this primitive has one)
-            material: hex_visual.primitives[0].material.clone().unwrap(),
-            ..Default::default()
-        });
-    }
+    // FIXME remove assert
+    assert_eq!(hex_visual.primitives.len(), 1);
+
+    (
+        hex_visual.primitives[0].mesh.clone(),
+        match selected {
+            true => gltf.named_materials["Selected".into()].clone(),
+            false => gltf.named_materials[tile_kind.material_name().into()].clone(),
+        },
+    )
 }
 
 fn update_render_entities(
     mut cmds: Commands<'_, '_>,
-    mut render_entities: Query<(Entity, &mut RenderTileEntity, &mut Transform), Without<Camera>>,
+    mut render_entities: Query<(Entity, &mut RenderTileEntity), Without<Camera>>,
     window_size: Res<WindowSize>,
     camera: Query<(&Transform, &Frustum), With<Camera>>,
     asset_server: Res<AssetServer>,
     map: CurrentHexMap<'_, '_>,
     window: Res<Windows>,
+    (hex_object_asset, assets_gltf, assets_gltfmesh): (
+        Res<HexObjectAsset>,
+        Res<Assets<Gltf>>,
+        Res<Assets<GltfMesh>>,
+    ),
 ) {
     let plane_center = {
         let (camera_pos, camera_frustum) = camera.single();
@@ -184,7 +227,7 @@ fn update_render_entities(
 
     loop {
         match (query_iter.next(), tile_iter.next()) {
-            (Some((_, mut tile_pos, _)), Some(tile)) => {
+            (Some((_, mut tile_pos)), Some(tile)) => {
                 tile_pos.q = tile.q;
                 tile_pos.r = tile.r;
             }
@@ -192,16 +235,10 @@ fn update_render_entities(
                 cmds.spawn_bundle((RenderTileEntity {
                     q: tile.q,
                     r: tile.r,
-                },))
-                    .insert_bundle(SceneBundle {
-                        scene: asset_server.load("tile.glb#Scene0"),
-                        ..default()
-                    })
-                    .insert(SceneToColor);
-                // TODO: use create_hex_visual here to instead create hex visuals
+                },));
                 // TODO: separate this out into a system that creates and manages a pool of hex meshes, and this system which moves and updates them as needed
             }
-            (Some((entity, _, _)), None) => cmds.entity(entity).despawn(),
+            (Some((entity, _)), None) => cmds.entity(entity).despawn(),
             (None, None) => break,
         }
     }
@@ -221,7 +258,7 @@ fn update_render_entities(
     };
     let selected_hex = crate::hexmap::wrap_hex_pos(selected_hex, 16, 16);
 
-    for (_, render_tile, mut transform) in render_entities.iter_mut() {
+    for (entity, render_tile) in render_entities.iter_mut() {
         let tile_pos = HexPos {
             q: render_tile.q,
             r: render_tile.r,
@@ -229,19 +266,29 @@ fn update_render_entities(
         let wrapped_tile_pos = crate::hexmap::wrap_hex_pos(tile_pos, 16, 16);
         let tile = map.get(wrapped_tile_pos);
 
-        let color = match selected_hex == wrapped_tile_pos {
-            true => Color::RED,
-            false => tile.kind.color(),
-        };
+        let (mesh, material) = create_hex_visual(
+            selected_hex == wrapped_tile_pos,
+            tile.kind,
+            &hex_object_asset,
+            &assets_gltf,
+            &assets_gltfmesh,
+        );
 
-        *transform = Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
-            .with_scale(Vec3::ONE * 20.25); // this should be `20` but then we get seams between edges because 3D sucks
+        cmds.entity(entity).insert_bundle(PbrBundle {
+            transform: Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
+                .with_scale(Vec3::ONE * 20.25), // this should be `20` but then we get seams between edges because 3D sucks
+            mesh,
+            material,
+            ..default()
+        });
     }
 }
 
 fn update_camera_pos(
     mut cam: Query<(&mut Transform, &ActionState<Action>), With<Camera>>,
     map: CurrentHexMap<'_, '_>,
+    mut window_size: ResMut<WindowSize>,
+    windows: Res<Windows>,
 ) {
     let map = map.hexmap();
     const CAM_SPEED: f32 = 4.0;
@@ -261,6 +308,12 @@ fn update_camera_pos(
         let offset = snapped_pos - pos.translation.truncate();
         let new_pos = hex_pos_to_pos(wrapped_pos) - offset;
         pos.translation = new_pos.extend(pos.translation.z);
+    }
+
+    let window = windows.get_primary().unwrap();
+    let size = WindowSize(window.width(), window.height());
+    if *window_size != size {
+        *window_size = size;
     }
 }
 
@@ -288,49 +341,4 @@ fn ray_intersects_xy_plane(plane_z: f32, ray_pos: Vec3, ray_dir: Vec3) -> Option
         ray_pos.x + ray_dir.x * dist_z,
         ray_pos.y + ray_dir.y * dist_z,
     ))
-}
-
-#[derive(Component)]
-struct SceneToColor;
-// Reference: https://github.com/bevyengine/bevy/blob/release-0.8.1/examples/3d/update_gltf_scene.rs
-// Reference: https://github.com/bevyengine/bevy/blob/release-0.8.1/examples/3d/vertex_colors.rs
-
-fn color_scene_entities(
-    time: Res<Time>,
-    scene_to_color: Query<Entity, With<SceneToColor>>,
-    children: Query<&Children>,
-    mut transforms: Query<&mut Transform>,
-    materials: Query<&Handle<StandardMaterial>>,
-    mut assets: ResMut<Assets<StandardMaterial>>,
-) {
-    for color_scene_entity in &scene_to_color {
-        let mut offset = 0.;
-        iter_hierarchy(color_scene_entity, &children, &mut |entity| {
-            // if let Ok(mut transform) = transforms.get_mut(entity) {
-            //     transform.translation = Vec3::new(
-            //         offset * time.seconds_since_startup().sin() as f32 / 20.,
-            //         0.,
-            //         time.seconds_since_startup().cos() as f32 / 20.,
-            //     );
-            //     offset += 1.0;
-            // }
-            if let Ok(material) = materials.get(entity) {
-                if let Some(mut mat) = assets.get_mut(material) {
-                    mat.base_color = match offset as u32 % 2 == 1 {
-                        true => Color::RED,
-                        false => Color::BLUE,
-                    };
-                }
-            }
-        });
-    }
-}
-
-fn iter_hierarchy(entity: Entity, children_query: &Query<&Children>, f: &mut impl FnMut(Entity)) {
-    (f)(entity);
-    if let Ok(children) = children_query.get(entity) {
-        for child in children.iter().copied() {
-            iter_hierarchy(child, children_query, f);
-        }
-    }
 }

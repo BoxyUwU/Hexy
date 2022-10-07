@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use crate::{hexmap::HexMap, MyTileData};
+use crate::{hexmap::HexMap, simulation::MyTileData};
 
 /// Runs a bunch of systems sequentailyl with no parallelism, flushing commands after each system runs
 pub struct SimpleSchedule {
