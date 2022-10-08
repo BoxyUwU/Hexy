@@ -2,7 +2,7 @@ use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
 };
-use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
+use bevy_inspector_egui::{Inspectable, WorldInspectorPlugin};
 use iyes_loopless::prelude::*;
 
 pub mod draw;

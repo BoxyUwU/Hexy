@@ -12,6 +12,7 @@ use bevy::{
     utils::FixedState,
 };
 use bevy_inspector_egui::Inspectable;
+use bevy_mod_raycast::{DefaultRaycastingPlugin, RayCastMesh, RayCastMethod, RayCastSource};
 use iyes_loopless::prelude::*;
 use leafwing_input_manager::{prelude::*, user_input::InputKind};
 // use std::f32::consts::PI;
@@ -34,8 +35,11 @@ struct RenderTileEntity {
 #[derive(Copy, Clone, PartialEq)]
 struct WindowSize(f32, f32);
 
+struct MyRaycastSet;
+
 pub fn init_app(app: &mut App) {
     app.add_plugin(InputManagerPlugin::<Action>::default());
+    app.add_plugin(DefaultRaycastingPlugin::<MyRaycastSet>::default());
     app.add_startup_system(|mut cmds: Commands<'_, '_>, windows: Res<Windows>| {
         let window = windows.get_primary().unwrap();
         cmds.insert_resource(WindowSize(window.width(), window.height()));
@@ -122,7 +126,8 @@ fn default_camera(mut cmds: Commands<'_, '_>) {
                 Action::MoveCamera,
             )
             .build(),
-    });
+    })
+    .insert(RayCastSource::<MyRaycastSet>::new());
 }
 
 // Helper for outlining an area to be hexified/covered in hex visuals
@@ -191,8 +196,7 @@ fn update_render_entities(
     mut cmds: Commands<'_, '_>,
     mut render_entities: Query<(Entity, &mut RenderTileEntity), Without<Camera>>,
     window_size: Res<WindowSize>,
-    camera: Query<(&Transform, &Frustum), With<Camera>>,
-    asset_server: Res<AssetServer>,
+    mut camera: Query<(&Transform, &Frustum, &mut RayCastSource<MyRaycastSet>), With<Camera>>,
     map: CurrentHexMap<'_, '_>,
     window: Res<Windows>,
     (hex_object_asset, assets_gltf, assets_gltfmesh): (
@@ -202,7 +206,7 @@ fn update_render_entities(
     ),
 ) {
     let plane_center = {
-        let (camera_pos, camera_frustum) = camera.single();
+        let (camera_pos, camera_frustum, _) = camera.single();
         let ray_dir = camera_frustum.planes[4].normal();
         ray_intersects_xy_plane(0.0, camera_pos.translation, ray_dir.into()).unwrap()
     };
@@ -237,32 +241,39 @@ fn update_render_entities(
                 tile_pos.r = tile.r;
             }
             (None, Some(tile)) => {
-                cmds.spawn_bundle((RenderTileEntity {
-                    q: tile.q,
-                    r: tile.r,
-                },));
+                cmds.spawn_bundle((
+                    RenderTileEntity {
+                        q: tile.q,
+                        r: tile.r,
+                    },
+                    RayCastMesh::<MyRaycastSet>::default(),
+                ));
                 // TODO: separate this out into a system that creates and manages a pool of hex meshes, and this system which moves and updates them as needed
             }
             (Some((entity, _)), None) => cmds.entity(entity).despawn(),
             (None, None) => break,
         }
     }
-    println!("{}", render_entities.iter_mut().count());
 
     let map = map.hexmap();
 
-    let camera = camera.single();
-    let cam_pos = camera.0;
+    let (_, _, mut raycast_source) = camera.single_mut();
     let window = window.get_primary().unwrap();
 
-    let selected_hex = match window.cursor_position() {
-        Some(cursor_pos) => pos_to_hex_pos(
-            cursor_pos.x + cam_pos.translation.x - window.width() / 2.,
-            cursor_pos.y + cam_pos.translation.y - window.height() / 2.,
-        ),
-        None => pos_to_hex_pos(cam_pos.translation.x, cam_pos.translation.y),
-    };
-    let selected_hex = crate::hexmap::wrap_hex_pos(selected_hex, 16, 16);
+    if let Some(cursor_pos) = window.cursor_position() {
+        raycast_source.cast_method = RayCastMethod::Screenspace(cursor_pos);
+    }
+    let selected_hex = raycast_source.intersect_top().map(|(entity, _)| {
+        let (_, tile) = render_entities.get(entity).unwrap();
+        crate::hexmap::wrap_hex_pos(
+            HexPos {
+                q: tile.q,
+                r: tile.r,
+            },
+            16,
+            16,
+        )
+    });
 
     for (entity, render_tile) in render_entities.iter_mut() {
         let tile_pos = HexPos {
@@ -273,7 +284,7 @@ fn update_render_entities(
         let tile = map.get(wrapped_tile_pos);
 
         let (mesh, material) = create_hex_visual(
-            selected_hex == wrapped_tile_pos,
+            selected_hex == Some(wrapped_tile_pos),
             tile.kind,
             &hex_object_asset,
             &assets_gltf,
