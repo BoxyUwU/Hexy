@@ -1,5 +1,4 @@
 use bevy::{gltf::Gltf, prelude::*};
-use bevy_inspector_egui::Inspectable;
 use iyes_loopless::prelude::*;
 
 use crate::AppState;
