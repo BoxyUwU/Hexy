@@ -6,7 +6,7 @@ use crate::{
 };
 use bevy::{
     gltf::{Gltf, GltfMesh},
-    math::vec2,
+    math::{vec2, vec3},
     prelude::*,
     render::{camera::Projection, primitives::Frustum},
     utils::FixedState,
@@ -22,6 +22,7 @@ use leafwing_input_manager::{prelude::*, user_input::InputKind};
 const HEX_SCALAR: f32 = 20.25;
 
 // FIXME stop `x20`'ing these numbers
+const HEX_TALLNESS: f32 = 20.0;
 const HEX_WIDTH: f32 = 40.0;
 const HEX_HEIGHT: f32 = 34.0;
 const HEX_HORIZ_SPACING: f32 = 30.0;
@@ -283,6 +284,13 @@ fn update_render_entities(
         let wrapped_tile_pos = crate::hexmap::wrap_hex_pos(tile_pos, 16, 16);
         let tile = map.get(wrapped_tile_pos);
 
+        let lowest_neighbor_height = wrapped_tile_pos
+            .neighbors()
+            .map(|pos| crate::hexmap::wrap_hex_pos(pos, 16, 16))
+            .map(|pos| map.get(pos).height)
+            .min()
+            .unwrap();
+
         let (mesh, material) = create_hex_visual(
             selected_hex == Some(wrapped_tile_pos),
             tile.kind,
@@ -291,13 +299,32 @@ fn update_render_entities(
             &assets_gltfmesh,
         );
 
-        cmds.entity(entity).insert_bundle(PbrBundle {
-            transform: Transform::from_translation(hex_pos_to_pos(tile_pos).extend(0.0))
+        cmds.entity(entity)
+            .insert_bundle(PbrBundle {
+                transform: Transform::from_translation(
+                    hex_pos_to_pos(tile_pos).extend(HEX_TALLNESS * tile.height as f32),
+                )
                 .with_scale(Vec3::ONE * HEX_SCALAR),
-            mesh,
-            material,
-            ..default()
-        });
+                mesh: mesh.clone(),
+                material: material.clone(),
+                ..default()
+            })
+            .despawn_descendants();
+        for depth in lowest_neighbor_height..tile.height {
+            cmds.entity(entity).with_children(|child| {
+                child.spawn_bundle(PbrBundle {
+                    transform: Transform::from_translation(vec3(
+                        0.0,
+                        0.0,
+                        -1. * (depth + 1) as f32,
+                    ))
+                    .with_scale(Vec2::ONE.extend(1.1)),
+                    mesh: mesh.clone(),
+                    material: material.clone(),
+                    ..default()
+                });
+            });
+        }
     }
 }
 

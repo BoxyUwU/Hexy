@@ -9,6 +9,7 @@ use iyes_loopless::prelude::*;
 
 #[derive(Debug, Inspectable)]
 pub struct MyTileData {
+    pub height: u8,
     pub kind: TileKind,
 }
 
@@ -41,6 +42,7 @@ fn init_map(mut cmds: Commands<'_, '_>) {
             std::iter::from_fn(move || {
                 i += 1;
                 Some(MyTileData {
+                    height: (i % 6) as u8,
                     kind: if i % 6 == 0 && i > 100 && i < 150 {
                         TileKind::Rock
                     } else {

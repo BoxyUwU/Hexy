@@ -6,6 +6,24 @@ pub struct HexPos {
     pub r: i32,
 }
 
+impl HexPos {
+    pub fn neighbors(self) -> impl Iterator<Item = HexPos> {
+        [
+            HexPos { q: 1, r: 0 },
+            HexPos { q: 1, r: 1 },
+            HexPos { q: -1, r: 0 },
+            HexPos { q: -1, r: -1 },
+            HexPos { q: 0, r: -1 },
+            HexPos { q: 0, r: -1 },
+        ]
+        .into_iter()
+        .map(move |pos| HexPos {
+            q: pos.q + self.q,
+            r: pos.r + self.r,
+        })
+    }
+}
+
 // dont `derive(Default)` the `tiles` field will have length 0
 // Not Inspectable because of Box<[T]>
 #[derive(Debug)]
